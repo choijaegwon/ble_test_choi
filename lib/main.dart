@@ -44,6 +44,24 @@ class _MyHomePageState extends State<MyHomePage> {
   /// 현재 연결되어 있는지 확인
   bool _isScanning = false;
 
+  /// 심박계 UUID
+  final Uuid heartRateServiceCBUUID = Uuid.parse('180d');
+
+  /// 심박수 측정 서비스 ID
+  final Uuid heartRateMeasurementCharacteristicCBUUID = Uuid.parse('2a37');
+
+  /// 디바이스 id저장
+  String? deviceId;
+
+  /// 심박수
+  int heart = 0;
+
+  @override
+  Stream<ConnectionStateUpdate> get state => _deviceConnectionController.stream;
+  final _deviceConnectionController = StreamController<ConnectionStateUpdate>();
+  late StreamSubscription<ConnectionStateUpdate> _connection;
+  late StreamSubscription<List<int>>? subscribeStream;
+
   /// 스캔 시작
   void startScan() async {
     /// 디바이스 목록 없애기
@@ -55,7 +73,7 @@ class _MyHomePageState extends State<MyHomePage> {
     /// 스트림 시작
     _subscription = _ble.scanForDevices(
       /// 원하는 서비스 아이디
-      withServices: [Uuid.parse('180d')],
+      withServices: [heartRateServiceCBUUID],
 
       /// 스캔모드 설정
       scanMode: ScanMode.lowLatency,
@@ -85,11 +103,45 @@ class _MyHomePageState extends State<MyHomePage> {
     return false;
   }
 
+  /// 블루투스 연동
+  void connect(String deviceId) async {
+    _connection = _ble.connectToDevice(id: deviceId).listen((update) {
+      // 연동되면 상태 없데이트하기
+      _deviceConnectionController.add(update);
+      print(update.connectionState);
+
+      // 블루투스 연동되고, 연결된 상태라면 읽어오기
+      if (update.connectionState == DeviceConnectionState.connected) {
+        read();
+      }
+    }, onError: (Object e) => print('$e'));
+  }
+
+  /// 블루투스 데이터 읽어오기
+  void read() async {
+    /// 어떤걸 받아올건지 정하기
+    final characteristic = QualifiedCharacteristic(
+        serviceId: heartRateServiceCBUUID,
+        characteristicId: heartRateMeasurementCharacteristicCBUUID,
+        deviceId: deviceId!);
+
+    /// 정한걸 스트림으로 결과값 받아오기
+    _ble.subscribeToCharacteristic(characteristic).listen((event) {
+      // 받아온 결과값 프린트찍기
+      print(event[1]);
+      // 받아온 결과값 변수에 저장하기
+      heart = event[1];
+    });
+  }
+
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
     print('initState');
+    _ble.statusStream.listen((status) {
+      print(status);
+    });
   }
 
   @override
@@ -110,6 +162,7 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               child: Text('스캔 시작하기'),
             ),
+            Text('$heart'),
             Expanded(
               child: Container(
                 color: Colors.lightGreen,
@@ -120,6 +173,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     return ListTile(
                       onTap: () {
                         print('$device.name');
+                        deviceId = device.id;
+                        connect(deviceId!);
                       },
                       title: Text(device.name ?? 'stringsss'),
                     );
