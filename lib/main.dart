@@ -117,6 +117,24 @@ class _MyHomePageState extends State<MyHomePage> {
     }, onError: (Object e) => print('$e'));
   }
 
+  /// 블루투스 연동 끊기
+  void disconnect() async {
+    try {
+      await _connection.cancel();
+    } on Exception catch (e, _) {
+      print("Error disconnecting from a device: $e");
+    } finally {
+      // Since [_connection] subscription is terminated, the "disconnected" state cannot be received and propagated
+      _deviceConnectionController.add(
+        ConnectionStateUpdate(
+          deviceId: deviceId!,
+          connectionState: DeviceConnectionState.disconnected,
+          failure: null,
+        ),
+      );
+    }
+  }
+
   /// 블루투스 데이터 읽어오기
   void read() async {
     /// 어떤걸 받아올건지 정하기
@@ -155,12 +173,23 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           children: <Widget>[
-            ElevatedButton(
-              onPressed: () {
-                print('스캔 시작');
-                startScan();
-              },
-              child: Text('스캔 시작하기'),
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () {
+                    print('스캔 시작');
+                    startScan();
+                  },
+                  child: Text('스캔 시작하기'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    print('연결 취소');
+                    disconnect();
+                  },
+                  child: Text('연결 끊기'),
+                ),
+              ],
             ),
             Text('$heart'),
             Expanded(
